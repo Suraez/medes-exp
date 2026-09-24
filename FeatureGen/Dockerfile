@@ -1,7 +1,7 @@
-FROM openwhisk/action-python-v3.10:nightly
+FROM openwhisk/actionloop-python-v3.6-ai:1.16.0
 
-RUN pip install --no-cache-dir \
-    pandas \
-    scikit-learn
+COPY requirements.txt requirements.txt
 
-COPY reviews50mb.csv /action/reviews50mb.csv
+RUN pip3 install --upgrade pip && \
+    pip3 install --no-cache-dir -r requirements.txt && \
+    ln -sf /usr/bin/python3 /usr/local/bin/python
