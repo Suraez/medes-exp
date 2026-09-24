@@ -1,82 +1,125 @@
+import boto3
+
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
+from sklearn.externals import joblib
 
 import pandas as pd
-import joblib
 from time import time
 import re
+import io
 
 
-# ============================================================
-# Configuration
-# ============================================================
+cleanup_re = re.compile('[^a-z]+')
+tmp = '/tmp/'
 
-DATASET_PATH = "/action/reviews50mb.csv"
-MODEL_PATH = "/tmp/lr_model.pk"
-
-cleanup_re = re.compile("[^a-z]+")
-
-
-# ============================================================
-# Text preprocessing
-# ============================================================
 
 def cleanup(sentence):
-    sentence = str(sentence).lower()
-    sentence = cleanup_re.sub(" ", sentence).strip()
+    sentence = sentence.lower()
+    sentence = cleanup_re.sub(' ', sentence).strip()
     return sentence
 
-
-# ============================================================
-# OpenWhisk action
-# ============================================================
 
 def main(event):
     latencies = {}
     timestamps = {}
 
     timestamps["starting_time"] = time()
-    metadata = event.get("metadata", {})
 
-    # --------------------------------------------------------
-    # Load dataset
-    # --------------------------------------------------------
+    dataset_bucket = event['dataset_bucket']
+    dataset_object_key = event['dataset_object_key']
+
+    model_bucket = event['model_bucket']
+    model_object_key = event['model_object_key']
+
+    endpoint_url = event['endpoint_url']
+    aws_access_key_id = event['aws_access_key_id']
+    aws_secret_access_key = event['aws_secret_access_key']
+
+    metadata = event['metadata']
+
+    s3_client = boto3.client(
+        's3',
+        endpoint_url=endpoint_url,
+        aws_access_key_id=aws_access_key_id,
+        aws_secret_access_key=aws_secret_access_key
+    )
+
+    # ========================================================
+    # Download dataset
+    # ========================================================
 
     start = time()
 
-    df = pd.read_csv(DATASET_PATH)
+    obj = s3_client.get_object(
+        Bucket=dataset_bucket,
+        Key=dataset_object_key
+    )
 
-    load_data = time() - start
-    latencies["load_data"] = load_data
+    download_data = time() - start
+    latencies["download_data"] = download_data
 
-    # --------------------------------------------------------
+    df = pd.read_csv(
+        io.BytesIO(
+            obj['Body'].read()
+        )
+    )
+
+    # ========================================================
     # Train model
-    # --------------------------------------------------------
+    # ========================================================
 
     start = time()
 
-    # Clean review text
-    df["train"] = df["Text"].apply(cleanup)
+    df['train'] = df['Text'].apply(cleanup)
 
-    # Convert text to TF-IDF features
     tfidf_vector = TfidfVectorizer(
         min_df=100
-    ).fit(df["train"])
+    ).fit(
+        df['train']
+    )
 
-    train = tfidf_vector.transform(df["train"])
+    train = tfidf_vector.transform(
+        df['train']
+    )
 
-    # Train Logistic Regression classifier
     model = LogisticRegression()
-    model.fit(train, df["Score"])
+
+    model.fit(
+        train,
+        df['Score']
+    )
 
     function_execution = time() - start
     latencies["function_execution"] = function_execution
 
-    # --------------------------------------------------------
-    # Save trained model locally
-    # --------------------------------------------------------
+    # ========================================================
+    # Save model locally
+    # ========================================================
 
-    joblib.dump(model, MODEL_PATH)
+    model_file_path = (
+        tmp + model_object_key
+    )
+
+    joblib.dump(
+        model,
+        model_file_path
+    )
+
+    # ========================================================
+    # Upload trained model to MinIO/S3
+    # ========================================================
+
+    start = time()
+
+    s3_client.upload_file(
+        model_file_path,
+        model_bucket,
+        model_object_key
+    )
+
+    upload_data = time() - start
+    latencies["upload_data"] = upload_data
 
     timestamps["finishing_time"] = time()
 
