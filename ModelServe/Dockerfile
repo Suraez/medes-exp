@@ -1,11 +1,11 @@
-FROM openwhisk/action-python-v3.10:nightly
+FROM openwhisk/actionloop-python-v3.6-ai:1.16.0
 
-RUN pip install --no-cache-dir \
-    torch \
-    numpy
+COPY rnn.py rnn.py
+COPY setup.py setup.py
+COPY requirements.txt requirements.txt
 
-COPY rnn.py /action/rnn.py
-COPY rnn_model.pth /action/rnn_model.pth
-COPY rnn_params.pkl /action/rnn_params.pkl
+RUN pip3 install --upgrade pip && \
+    pip3 install --no-cache-dir -r requirements.txt && \
+    ln -sf /usr/bin/python3 /usr/local/bin/python
 
-ENV PYTHONPATH="/action:${PYTHONPATH}"
+RUN pip3 install -e .
