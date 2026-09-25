@@ -1,6 +1,17 @@
-FROM openwhisk/action-python-v3.10:nightly
+FROM openwhisk/actionloop-python-v3.6-ai:1.16.0
 
-RUN pip install --no-cache-dir \
-    opencv-python-headless
+COPY requirements.txt requirements.txt
 
-COPY input.mp4 /action/input.mp4
+RUN pip3 install --upgrade pip && \
+    pip3 install --no-cache-dir -r requirements.txt && \
+    ln -sf /usr/bin/python3 /usr/local/bin/python
+
+RUN apt-get update && \
+    apt-get upgrade -y && \
+    apt-get install -y \
+        libsm6 \
+        libxrender1 \
+        libfontconfig1 \
+        libxext6 \
+        libxrender-dev \
+    && rm -rf /var/lib/apt/lists/*
