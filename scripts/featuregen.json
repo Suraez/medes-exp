@@ -1,0 +1,8 @@
+{
+  "input_bucket": "functionbench",
+  "key": "datasets/reviews10mb.csv",
+  "endpoint_url": "http://172.17.0.1:9000",
+  "aws_access_key_id": "minioadmin",
+  "aws_secret_access_key": "minioadmin",
+  "metadata": {}
+}

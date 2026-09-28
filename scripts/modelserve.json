@@ -1,0 +1,11 @@
+{
+    "language": "English",
+    "start_letters": "ABC",
+    "model_parameter_object_key": "models/rnn_params.pkl",
+    "model_object_key": "models/rnn_model.pth",
+    "model_bucket": "functionbench",
+    "endpoint_url": "http://172.17.0.1:9000",
+    "aws_access_key_id": "minioadmin",
+    "aws_secret_access_key": "minioadmin",
+    "metadata": {}
+  }

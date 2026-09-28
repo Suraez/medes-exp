@@ -1,0 +1,10 @@
+{
+    "dataset_bucket": "functionbench",
+    "dataset_object_key": "datasets/reviews10mb.csv",
+    "model_bucket": "functionbench",
+    "model_object_key": "lr_model.pk",
+    "endpoint_url": "http://127.0.0.1:9000",
+    "aws_access_key_id": "minioadmin",
+    "aws_secret_access_key": "minioadmin",
+    "metadata": {}
+  }
