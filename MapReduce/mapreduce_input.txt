@@ -1,4 +1,0 @@
-<title>Article1</title><text>Python and Java are popular programming languages.</text>
-<title>Article2</title><text>JavaScript and CSS are often used for web development.</text>
-<title>Article3</title><text>C++ and Python are commonly used in systems and data science.</text>
-<title>Article4</title><text>Ruby, Perl, Scala, and Haskell are programming languages.</text>
