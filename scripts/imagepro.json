@@ -2,7 +2,7 @@
   "input_bucket": "functionbench",
   "object_key": "images/input.jpg",
   "output_bucket": "functionbench",
-  "endpoint_url": "http://172.17.0.1:9000",
+  "endpoint_url": "127.0.0.1:9000",
   "aws_access_key_id": "minioadmin",
   "aws_secret_access_key": "minioadmin",
   "metadata": {}

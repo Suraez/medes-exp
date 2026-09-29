@@ -14,6 +14,10 @@ from time import time
 import re
 import io
 
+import os
+import socket
+import threading
+
 
 cleanup_re = re.compile('[^a-z]+')
 tmp = '/tmp/'
@@ -281,31 +285,18 @@ class RequestHandler(BaseHTTPRequestHandler):
             return
 
         try:
-            # ------------------------------------------------
-            # Read request body
-            # ------------------------------------------------
-
             content_length = int(
                 self.headers.get("Content-Length", 0)
             )
 
-            body = self.rfile.read(
-                content_length
-            )
+            body = self.rfile.read(content_length)
 
             event = json.loads(
                 body.decode("utf-8")
             )
 
-            # ------------------------------------------------
-            # Execute ModelTrain
-            # ------------------------------------------------
-
+            # Execute the SAME benchmark function.
             result = main(event)
-
-            # ------------------------------------------------
-            # Return result
-            # ------------------------------------------------
 
             response = json.dumps(
                 result
@@ -350,6 +341,7 @@ class RequestHandler(BaseHTTPRequestHandler):
             self.wfile.write(response)
 
     def log_message(self, format, *args):
+
         print(
             "%s - - [%s] %s" %
             (
@@ -362,11 +354,122 @@ class RequestHandler(BaseHTTPRequestHandler):
 
 
 # ============================================================
-# Start lightweight server
+# Unix-domain control server
+#
+# Used only by the Docker/CRIU experiment so that a specific
+# restored clone can be invoked deterministically.
+#
+# The benchmark execution itself is still main(event).
+# ============================================================
+
+CONTROL_SOCKET = "/control/invoke.sock"
+
+
+def unix_control_server():
+
+    # Remove a stale socket path if one exists.
+    try:
+        os.unlink(CONTROL_SOCKET)
+    except OSError:
+        pass
+
+    server = socket.socket(
+        socket.AF_UNIX,
+        socket.SOCK_STREAM
+    )
+
+    server.bind(CONTROL_SOCKET)
+
+    # Allow the host-side experiment script to connect.
+    os.chmod(CONTROL_SOCKET, 0o666)
+
+    server.listen(1)
+
+    print(
+        "Unix control server listening on {}".format(
+            CONTROL_SOCKET
+        ),
+        flush=True
+    )
+
+    while True:
+
+        conn, _ = server.accept()
+
+        try:
+            # Protocol:
+            #
+            # client sends:
+            #     <JSON>\n
+            #
+            # server returns:
+            #     <JSON>\n
+
+            chunks = []
+
+            while True:
+
+                data = conn.recv(65536)
+
+                if not data:
+                    break
+
+                chunks.append(data)
+
+                if b"\n" in data:
+                    break
+
+            request = b"".join(chunks)
+
+            # Only process the first newline-delimited request.
+            request = request.split(b"\n", 1)[0]
+
+            event = json.loads(
+                request.decode("utf-8")
+            )
+
+            # IMPORTANT:
+            # Execute ModelTrain in THIS restored Python process.
+            result = main(event)
+
+            response = (
+                json.dumps(result) + "\n"
+            ).encode("utf-8")
+
+            conn.sendall(response)
+
+        except Exception as e:
+
+            response = (
+                json.dumps({
+                    "error": str(e)
+                }) + "\n"
+            ).encode("utf-8")
+
+            try:
+                conn.sendall(response)
+            except Exception:
+                pass
+
+        finally:
+            conn.close()
+
+
+# ============================================================
+# Start servers
 # ============================================================
 
 if __name__ == "__main__":
 
+    # Start the per-container Unix control channel.
+    control_thread = threading.Thread(
+        target=unix_control_server
+    )
+
+    control_thread.daemon = True
+    control_thread.start()
+
+    # Keep the existing HTTP interface.
     server = HTTPServer(
         ("0.0.0.0", 8080),
         RequestHandler

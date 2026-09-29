@@ -8,6 +8,10 @@ from PIL import Image
 
 import ops
 
+import socket
+import threading
+
+
 
 import json
 from http.server import BaseHTTPRequestHandler, HTTPServer
@@ -301,8 +305,95 @@ class RequestHandler(BaseHTTPRequestHandler):
     def log_message(self, format, *args):
         return
 
+# ============================================================
+# Unix-domain control socket
+# ============================================================
+
+CONTROL_SOCKET = "/control/invoke.sock"
+
+
+def unix_control_server():
+
+    try:
+        os.unlink(CONTROL_SOCKET)
+    except FileNotFoundError:
+        pass
+
+    server = socket.socket(
+        socket.AF_UNIX,
+        socket.SOCK_STREAM
+    )
+
+    server.bind(CONTROL_SOCKET)
+
+    os.chmod(CONTROL_SOCKET, 0o666)
+
+    server.listen(8)
+
+    print(
+        "ImagePro Unix control socket listening at "
+        + CONTROL_SOCKET,
+        flush=True
+    )
+
+    while True:
+
+        conn, _ = server.accept()
+
+        try:
+            request = b""
+
+            while b"\n" not in request:
+                chunk = conn.recv(65536)
+
+                if not chunk:
+                    break
+
+                request += chunk
+
+            if not request:
+                continue
+
+            line = request.split(b"\n", 1)[0]
+
+            event = json.loads(
+                line.decode("utf-8")
+            )
+
+            # Execute ImagePro main() inside this same
+            # long-lived checkpointed/restored process.
+            result = main(event)
+
+            response = (
+                json.dumps(result) + "\n"
+            ).encode("utf-8")
+
+            conn.sendall(response)
+
+        except Exception as e:
+
+            response = (
+                json.dumps({
+                    "error": str(e)
+                }) + "\n"
+            ).encode("utf-8")
+
+            try:
+                conn.sendall(response)
+            except Exception:
+                pass
+
+        finally:
+            conn.close()
 
 if __name__ == "__main__":
+
+    control_thread = threading.Thread(
+        target=unix_control_server,
+        daemon=True
+    )
+
+    control_thread.start()
 
     server = HTTPServer(
         ("0.0.0.0", 8080),
